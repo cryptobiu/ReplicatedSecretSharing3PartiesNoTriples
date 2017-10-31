@@ -1,3 +1,0 @@
-/home/meital/ReplicatedSecretSharing3PartiesArithmeticNoTriples/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/meital/ReplicatedSecretSharing3PartiesArithmeticNoTriples/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/meital/ReplicatedSecretSharing3PartiesArithmeticNoTriples/cmake-build-debug/CMakeFiles/ReplicatedSecretSharing3PartiesArithmetic.dir
