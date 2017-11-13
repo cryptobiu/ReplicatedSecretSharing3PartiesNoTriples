@@ -3,9 +3,9 @@ project(ReplicatedSecretSharing3PartiesArithmetic)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -std=c++11 -maes -mpclmul -mbmi2 -flto")
 
-SET (BOOST_ROOT $ENV{HOME}/boost_1_60_0/)
-SET (BOOST_INCLUDEDIR $ENV{HOME}/boost_1_60_0/)
-SET (BOOST_LIBRARYDIR $ENV{HOME}/boost_1_60_0/stage/lib)
+SET (BOOST_ROOT $ENV{HOME}/boost_1_64_0/)
+SET (BOOST_INCLUDEDIR $ENV{HOME}/boost_1_64_0/)
+SET (BOOST_LIBRARYDIR $ENV{HOME}/boost_1_64_0/stage/lib)
 find_package(Boost COMPONENTS system thread REQUIRED)
 
 INCLUDE_DIRECTORIES($ENV{HOME}/ntl-9.10.0/include $ENV{HOME} ${BOOST_INCLUDEDIR}

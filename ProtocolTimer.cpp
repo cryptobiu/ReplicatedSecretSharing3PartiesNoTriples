@@ -19,14 +19,14 @@ void ProtocolTimer::writeToFile() {
                << computationPhaseArr[i] << ","
                << verificationPhaseArr[i] << ","
                << outputPhaseArr[i] << ","
-               << totalTimeArr[i] << ",\n";
+               << preparationPhaseArr[i] + inputPreparationArr[i] + computationPhaseArr[i] + verificationPhaseArr[i] + outputPhaseArr[i] << ",\n";
 
         cout<< "Times" <<preparationPhaseArr[i] << ","
             << inputPreparationArr[i] << ","
             << computationPhaseArr[i] << ","
             << verificationPhaseArr[i] << ","
             << outputPhaseArr[i] << ","
-            << totalTimeArr[i] << ",\n";
+            << preparationPhaseArr[i] + inputPreparationArr[i] + computationPhaseArr[i] + verificationPhaseArr[i] + outputPhaseArr[i] << ",\n";
     }
 
     myfile.close();
