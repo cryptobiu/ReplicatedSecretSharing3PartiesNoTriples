@@ -3,9 +3,9 @@
 
 #include <stdlib.h>
 #include <libscapi/include/primitives/Matrix.hpp>
-#include <libscapi/include/circuits/arithmeticCircuit/ArithmeticCircuit.hpp>
+#include <libscapi/include/circuits/ArithmeticCircuit.hpp>
 #include <libscapi/include/comm/MPCCommunication.hpp>
-#include <libscapi/include/CryptoInfra/Protocol.hpp>
+#include <libscapi/include/cryptoInfra/Protocol.hpp>
 
 #include <libscapi/include/primitives/Mersenne.hpp>
 #include "ProtocolTimer.h"
@@ -57,9 +57,7 @@ private:
     int index_for_mults = 0;
     vector<FieldType> random_for_inputs;
 
-    vector<FieldType> random_elemets_for_verify;
     vector<FieldType> r_for_verify_key1;
-    vector<FieldType> r_for_verify_key2;
     vector<FieldType> r_for_comparing_views;
     vector<FieldType> random_element_for_verify;
 
@@ -186,7 +184,7 @@ public:
     /**
      * this method check if the triples are currect.
      */
-    void verification(vector<FieldType>& x, vector<FieldType>& y, vector<FieldType>& z, FieldType *randomElements, int numOfMult);
+    void verification(int numOfMult);
 
     /**
      * this method open the shares and reconstructs the secrets.
@@ -240,11 +238,11 @@ ProtocolParty<FieldType>::ProtocolParty(int argc, char* argv[]) : Protocol("Repl
     myInputs.resize(numOfInputGates);
     shareIndex = numOfInputGates;
 
-    parties = MPCCommunication::setCommunication(io_service, m_partyId-1, N, arguments["partiesFile"]);
+    parties = MPCCommunication::setCommunication(io_service, m_partyId, N, arguments["partiesFile"]);
 
     int R = 0, L = 1; // TO DO: communication
 
-    if(m_partyId == 2)
+    if(m_partyId == 1)
     {
         R = 1;
         L = 0;
@@ -368,7 +366,7 @@ void ProtocolParty<FieldType>::runOnline() {
 
         for(int i=0; i<iterations; i++) {
 
-            verification(x_triple, y_triple, z_triple, random_elemets_for_verify.data() + i*circuit.getNrOfMultiplicationGates(), circuit.getNrOfMultiplicationGates());
+            verification(circuit.getNrOfMultiplicationGates() + circuit.getNrOfInputGates());
 
         }
 
@@ -410,48 +408,37 @@ void ProtocolParty<FieldType>::initializationPhase()
      *      gateShareArr[2*k] = s
      *      gateShareArr[2*k+1] = t
      */
-    gateShareArr.resize((M - circuit.getNrOfOutputGates())*2); // my share of the gate (for all gates)
+    gateShareArr.resize((M - circuit.getNrOfOutputGates())*4); // my share of the gate (for all gates)
 
     inv_3 = (field->GetElement(1))/(field->GetElement(3)); // calculate the inverse of 3 in the field
 
     fieldByteSize = field->getElementSizeInBytes();
 
-    LEFT = (m_partyId - 2) % 3; // the number of party i Minus 1
-    RIGHT = (m_partyId) % 3; // the number of party i Plus 1
+    LEFT = (m_partyId - 1) % 3; // the number of party i Minus 1
+    RIGHT = (m_partyId +1) % 3; // the number of party i Plus 1
 
 
 
-    if(m_partyId == 1) {
+    if(m_partyId == 0) {
         LEFT = 2;
         RIGHT = 1;
 
-        ZERO_PARTY = m_partyId -1;
-        ONE_PARTY = RIGHT;
-        TWO_PARTY = LEFT;
-    }
-
-    if(m_partyId==2){
-        ZERO_PARTY = LEFT;
-        ONE_PARTY = m_partyId - 1;
     }
 
     num_2 = (field->GetElement(2));
 
     num_0 = (field->GetElement(0));
 
-    alpha.resize(circuit.getNrOfMultiplicationGates());
+    alpha.resize(2*circuit.getNrOfMultiplicationGates());
     random_for_inputs.resize(2 * circuit.getNrOfInputGates());
 
     if(fieldByteSize <= 4) {
-        random_elemets_for_verify.resize(4* circuit.getNrOfMultiplicationGates());
-        beta_triple.resize(2 * circuit.getNrOfMultiplicationGates());
+        beta_triple.resize(2 * (circuit.getNrOfMultiplicationGates() + circuit.getNrOfInputGates()));
     } else {
-        random_elemets_for_verify.resize(2 * circuit.getNrOfMultiplicationGates());
-        beta_triple.resize(circuit.getNrOfMultiplicationGates());
+        beta_triple.resize(circuit.getNrOfMultiplicationGates() + circuit.getNrOfInputGates());
     }
 
     r_for_verify_key1.resize(2* (16/field->getElementSizeInBytes() + 1)); // 16 bytes of aes key
-    r_for_verify_key2.resize(2* (16/field->getElementSizeInBytes() + 1)); // 16 bytes of aes key
     r_for_comparing_views.resize(2* (16/field->getElementSizeInBytes() + 1)); // 16 bytes of aes key
     random_element_for_verify.resize(2);//1 pair for the element
 
@@ -476,7 +463,7 @@ void ProtocolParty<FieldType>::generateRandomness31Bits() {
         numOfTriples = numOfMult*2;
     }
 
-    alpha_for_mults.resize(2*(3*numOfMult + 1));
+    alpha_for_mults.resize(2*(numOfInputGates+1));
 
     PrgFromOpenSSLAES prg((numOfMult * 9 * fieldByteSize + (numOfInputGates+3*rounds + 3 )* fieldByteSize )/16 + 1);
     PrgFromOpenSSLAES prg2((numOfMult * 9 * fieldByteSize + (numOfInputGates+3*rounds + 3 )* fieldByteSize)/16 + 1);
@@ -493,11 +480,11 @@ void ProtocolParty<FieldType>::generateRandomness31Bits() {
 
     prg.setKey(key); // ki
 
-    for(int j=0; j<numOfMult;j++) {
+    for(int j=0; j<2*numOfMult;j++) {
         alpha[j] = field->GetElement(prg2.getRandom32()) - field->GetElement(prg.getRandom32());
     }
 
-    for(int j=0; j<2*(3*numOfMult + 1);j++) {
+    for(int j=0; j<2*(numOfInputGates+1);j++) {
         alpha_for_mults[j] = field->GetElement(prg2.getRandom32()) - field->GetElement(prg.getRandom32());
     }
 
@@ -523,12 +510,6 @@ void ProtocolParty<FieldType>::generateRandomness31Bits() {
         r_for_verify_key1[2*j + 1] = num_0 - (num_2 * riMinus1) - ri;
     }
 
-    for(int j=0; j < rounds;j++) {
-        ri = field->GetElement(prg.getRandom32());
-        riMinus1 = field->GetElement(prg2.getRandom32());
-        r_for_verify_key2[2*j] = riMinus1 - ri;
-        r_for_verify_key2[2*j + 1] = num_0 - (num_2 * riMinus1) - ri;
-    }
 
     for(int j=0; j < rounds;j++) {
         ri = field->GetElement(prg.getRandom32());
@@ -542,16 +523,6 @@ void ProtocolParty<FieldType>::generateRandomness31Bits() {
     riMinus1 = field->GetElement(prg2.getRandom32());
     random_element_for_verify[0] = riMinus1 - ri;
     random_element_for_verify[1] = num_0 - (num_2 * riMinus1) - ri;
-
-    // Generating The Triples
-
-
-    for(int j=0; j < numOfTriples; j++) {
-        ri = field->GetElement(prg.getRandom32());
-        riMinus1 = field->GetElement(prg2.getRandom32());
-        random_elemets_for_verify[2*j] = riMinus1 - ri;
-        random_elemets_for_verify[2*j + 1] = num_0 - (num_2 * riMinus1) - ri;
-    }
 
 
 }
@@ -573,7 +544,7 @@ void ProtocolParty<FieldType>::generateRandomness61Bits() {
         numOfTriples = numOfMult*2;
     }
 
-    alpha_for_mults.resize(3*numOfMult + 1);
+    alpha_for_mults.resize(numOfInputGates+1);
 
     PrgFromOpenSSLAES prg((numOfMult * 5 * fieldByteSize + (numOfInputGates+3*rounds + 2 )* fieldByteSize)/16 + 1);
     PrgFromOpenSSLAES prg2((numOfMult * 5 * fieldByteSize + (numOfInputGates+3*rounds + 2 ) * fieldByteSize)/16 + 1);
@@ -590,11 +561,11 @@ void ProtocolParty<FieldType>::generateRandomness61Bits() {
 
     prg.setKey(key); // ki
 
-    for(int j=0; j<numOfMult;j++) {
+    for(int j=0; j<2*numOfMult;j++) {
         alpha[j] = field->GetElement(prg2.getRandom64()) - field->GetElement(prg.getRandom64());
     }
 
-    for(int j=0; j<3*numOfMult + 1;j++) {
+    for(int j=0; j<numOfInputGates+1;j++) {
         alpha_for_mults[j] = field->GetElement(prg2.getRandom64()) - field->GetElement(prg.getRandom64());
     }
 
@@ -620,12 +591,6 @@ void ProtocolParty<FieldType>::generateRandomness61Bits() {
         r_for_verify_key1[2*j + 1] = num_0 - (num_2 * riMinus1) - ri;
     }
 
-    for(int j=0; j < rounds;j++) {
-        ri = field->GetElement(prg.getRandom64());
-        riMinus1 = field->GetElement(prg2.getRandom64());
-        r_for_verify_key2[2*j] = riMinus1 - ri;
-        r_for_verify_key2[2*j + 1] = num_0 - (num_2 * riMinus1) - ri;
-    }
 
     for(int j=0; j < rounds;j++) {
         ri = field->GetElement(prg.getRandom64());
@@ -639,15 +604,6 @@ void ProtocolParty<FieldType>::generateRandomness61Bits() {
     random_element_for_verify[0] = riMinus1 - ri;
     random_element_for_verify[1] = num_0 - (num_2 * riMinus1) - ri;
 
-    // Generating The Triples
-
-
-    for(int j=0; j < numOfTriples; j++) {
-        ri = field->GetElement(prg.getRandom64());
-        riMinus1 = field->GetElement(prg2.getRandom64());
-        random_elemets_for_verify[2*j] = riMinus1 - ri;
-        random_elemets_for_verify[2*j + 1] = num_0 - (num_2 * riMinus1) - ri;
-    }
 
 }
 
@@ -675,9 +631,11 @@ void ProtocolParty<FieldType>::honestMultiplication(FieldType *a, FieldType *b, 
 
     //convert to bytes
 
-    for(int j=0; j < numOfMult;j++) {
-        field->elementToBytes(sendBufsBytes.data() + (j * fieldByteSize), sendBufsElements[j]);
-    }
+//    for(int j=0; j < numOfMult;j++) {
+//        field->elementToBytes(sendBufsBytes.data() + (j * fieldByteSize), sendBufsElements[j]);
+//    }
+
+    field->elementVectorToByteVector(sendBufsElements, sendBufsBytes);
 
     sendNext(sendBufsBytes, recBufsBytes);
 
@@ -701,22 +659,10 @@ void ProtocolParty<FieldType>::honestMultiplication(FieldType *a, FieldType *b, 
 
 
 template <class FieldType>
-void ProtocolParty<FieldType>::verification(vector<FieldType>& x, vector<FieldType>& y, vector<FieldType>& z,
-                                            FieldType *randomElements, int numOfMult)
+void ProtocolParty<FieldType>::verification(int numOfMult)
 {
     PrgFromOpenSSLAES prg(numOfMult/4+1);
-
-    vector<FieldType> r(2*numOfMult);//vector holding the random shares generated
-    vector<FieldType> rx(2*numOfMult);//vector holding the multiplication of x and r
-    vector<FieldType> zTag(2*numOfMult);//vector holding z+randomElements*x
-    vector<FieldType> yTag(2*numOfMult);//vector holding y+randomElements
-    vector<FieldType> firstMult(4*numOfMult);//vector some computations
-    vector<FieldType> secondMult(4*numOfMult);//vector some computations
-    vector<FieldType> outputMult(4*numOfMult);//vector holding the 4*numOfTriples output of the multiplication
-    vector<FieldType> outputMultT(2);//vector holding the [T]=[R][V] output of the multiplication
-    vector<FieldType> v(2*numOfMult);//vector holding the 4*numOfTriples output of the multiplication
-
-    vector<byte> keyVector(16);
+   vector<byte> keyVector(16);
 
     keyVector = generateCommonKey(r_for_verify_key1);
     // generating 128 bit AES key
@@ -739,112 +685,75 @@ void ProtocolParty<FieldType>::verification(vector<FieldType>& x, vector<FieldTy
 
     cout<<"after creating beta"<<endl;
 
+    //preapre x,y,z for the verification sub protocol
+    vector<FieldType> neededShares(numOfMult*4);
+
+
     int index = 0;
-    for(int k = 0; k < circuit.getGates().size(); k++)
-    {
-        if (circuit.getGates()[k].gateType == MULT) {
-            x[index] = gateShareArr[2 * circuit.getGates()[k].input1];
-            x[index + 1] = gateShareArr[2 * circuit.getGates()[k].input1 + 1];
-            y[index] = gateShareArr[2 * circuit.getGates()[k].input2];
-            y[index + 1] = gateShareArr[2 * circuit.getGates()[k].input2 + 1];
-            z[index] = gateShareArr[2 * circuit.getGates()[k].output];
-            z[index + 1] = gateShareArr[2 * circuit.getGates()[k].output + 1];
-            index+=2;
+    for (int k = 0; k < numOfInputGates; k++) {
+
+        auto gate = circuit.getGates()[k];
+
+        if (gate.gateType == INPUT) {
+            neededShares[4*index] = gateShareArr[gate.output*4];
+            neededShares[4*index+1] = gateShareArr[gate.output*4+1];
+            neededShares[4*index+2] = gateShareArr[gate.output*4+2];
+            neededShares[4*index+3] = gateShareArr[gate.output*4+3];
+
+            index++;
         }
     }
 
+    for (int k = numOfInputGates - 1; k < M - numOfOutputGates + 1; k++) {
 
-    //[z'k] = [zk] + betak*[xk] , [y'k] = [yk] + betak
-    for(int k=0; k<numOfMult; k++){
-        zTag[2*k] = z[2*k] + beta_triple[k]*x[2*k];
-        zTag[2*k+1] = z[2*k+1] + beta_triple[k]*x[2*k+1];
-
-        yTag[2*k] = y[2*k];
-        yTag[2*k+1] = y[2*k+1] - beta_triple[k];
-
-    }
-
-     //run semi-honest multiplication on x and r
-    honestMultiplication(x.data(), randomElements,rx, numOfMult);
-
-
-    //prepare the 2k pairs for multiplication
-    for(int k=0; k<numOfMult; k++){
-
-        firstMult[4*k] = rx[2*k];//the row assignment (look at the paper)
-        firstMult[4*k+1] = rx[2*k+1];//the row assignment (look at the paper)
-
-        secondMult[4*k] = yTag[2*k];
-        secondMult[4*k+1] = yTag[2*k+1];
-
-        firstMult[4*k+2] = randomElements[2*k];
-        firstMult[4*k+3] = randomElements[2*k+1];
-
-        secondMult[4*k+2] = zTag[2*k];
-        secondMult[4*k+3] = zTag[2*k+1];
-
-    }
-
-
-    //run semi-honest multiplication on x and r
-    honestMultiplication(firstMult.data(), secondMult.data(),outputMult, numOfMult*2);
-
-
-    //compute the output share to check
-    FieldType vk;
-
-    for(int k=0; k<numOfMult; k++){
-        v[2*k] = outputMult[4*k + 2]  - outputMult[4*k];
-        v[2*k+1] = outputMult[4*k + 3]  - outputMult[4*k+1];
-
-    }
-
-
-    vector<byte> keyVector2(16);
-    vector <FieldType> gama_triple(numOfMult);
-
-    //generate a common key to generate numOfMult pseudo-random elements (gama-triple)
-    keyVector2 = generateCommonKey(r_for_verify_key2);
-    // generating 128 bit AES key
-    SecretKey sk2(keyVector, "aes");
-    prg.setKey(sk2);
-
-    if(fieldByteSize > 4) {
-        for(int j=0; j<numOfMult;j++) {
-
-            gama_triple[j] = field->GetElement((prg.getRandom64() >> 3));
+        auto gate = circuit.getGates()[k];
+        if (gate.gateType == MULT) {
+            neededShares[4*index] = gateShareArr[gate.output*4];
+            neededShares[4*index+1] = gateShareArr[gate.output*4+1];
+            neededShares[4*index+2] = gateShareArr[gate.output*4+2];
+            neededShares[4*index+3] = gateShareArr[gate.output*4+3];
+            index++;
         }
-    } else {
-        for(int j=0; j<numOfMult;j++) {
 
-            gama_triple[j] = field->GetElement(prg.getRandom32());
-        }
+
+    }
+    vector<FieldType> u(2);
+    vector<FieldType> w(2);
+    vector<FieldType> ru(2);
+    vector<FieldType> T(2);
+
+
+    for(int i=0;i<numOfMult;i++){
+
+        u[0] += beta_triple[i]*neededShares[i*4];
+        u[1] += beta_triple[i]*neededShares[i*4 + 1];
+        w[0] += beta_triple[i]*neededShares[i*4+2];
+        w[1] += beta_triple[i]*neededShares[i*4+3];
     }
 
-    //compute locally [v] = sum{gama_k * [vk]}
 
-    vector <FieldType> accumeV(2);
-    for(int i=0; i<numOfMult; i++){
+    //run the semi honest multiplication on u and r to get ru
+    honestMultiplication(u.data(), random_element_for_verify.data(),ru, 1);
 
-        accumeV[0] += gama_triple[i]*v[2*i];
-        accumeV[1] += gama_triple[i]*v[2*i+1];
+    T[0] = w[0] - ru[0];
+    T[1] = w[1] - ru[1];
+
+
+    //open [T]
+
+    vector<FieldType> secretArr(1);
+
+    openShare(1,T,secretArr);
+
+    //check that T=0
+    if(secretArr[0] != *field->GetZero()) {
+        cout<<"bassssssaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"<<endl;
+        return;
     }
+    else {
 
-    //use the pre-generated random sharing for multiplying R and V
-
-    //run semi-honest multiplication on x and r
-    honestMultiplication(accumeV.data(), random_element_for_verify.data(), outputMultT, 1);
-
-
-    vector<FieldType> secret(1);
-
-    //generate enough random shares for the AES key
-    openShare(1, outputMultT, secret);
-
-  //check that T=0
-    if(secret[0] != *field->GetZero()) {
-        cout << "cheating - T!=0 !!!" << '\n';
-        exit(0);
+        cout<<"yessssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss"<<endl;
+        return;
     }
 
 }
@@ -909,6 +818,7 @@ void ProtocolParty<FieldType>::inputPreparation()
     vector<vector<byte>> sendBufsBytes(N);
     vector<vector<byte>> recBufBytes(N);
     vector<vector<FieldType>> recBufElements(N);
+    vector<FieldType> inputShares(circuit.getNrOfInputGates()*2);
 
     int input;
     int index = 0;
@@ -920,10 +830,10 @@ void ProtocolParty<FieldType>::inputPreparation()
     {
         if(circuit.getGates()[k].gateType == INPUT) {
             //get the expected sized from the other parties
-            sizes[(circuit.getGates()[k].party - 1)]++;  // MEITAL
+            sizes[(circuit.getGates()[k].party)]++;  // MEITAL
 
             // send to party (which need this gate) your share for this gate
-            sendBufsElements[circuit.getGates()[k].party - 1].push_back(random_for_inputs[2*k]);// send t
+            sendBufsElements[circuit.getGates()[k].party].push_back(random_for_inputs[2*k]);// send t
         }
     }
 
@@ -931,10 +841,12 @@ void ProtocolParty<FieldType>::inputPreparation()
     {
 
         sendBufsBytes[i].resize(sendBufsElements[i].size()*fieldByteSize);
-        recBufBytes[i].resize(sizes[m_partyId - 1]*fieldByteSize);
-        for(int j=0; j<sendBufsElements[i].size();j++) {
-            field->elementToBytes(sendBufsBytes[i].data() + (j * fieldByteSize), sendBufsElements[i][j]);
-        }
+        recBufBytes[i].resize(sizes[m_partyId]*fieldByteSize);
+//        for(int j=0; j<sendBufsElements[i].size();j++) {
+//            field->elementToBytes(sendBufsBytes[i].data() + (j * fieldByteSize), sendBufsElements[i][j]);
+//        }
+
+        field->elementVectorToByteVector(sendBufsElements[i], sendBufsBytes[i]);
     }
 
     roundFunctionSync(sendBufsBytes, recBufBytes,10);
@@ -996,24 +908,28 @@ void ProtocolParty<FieldType>::inputPreparation()
 
             sendBufsElements_1[LEFT].push_back(field->GetElement(input) - v);
             sendBufsElements_1[RIGHT].push_back(field->GetElement(input) - v);
-            sendBufsElements_1[m_partyId -1].push_back(field->GetElement(input) - v);
+            sendBufsElements_1[m_partyId].push_back(field->GetElement(input) - v);
 
             counter++;
 
-            gateShareArr[2*(circuit.getGates()[k].output)] = m_t;// set the share sent from the party owning the input
-            gateShareArr[2*(circuit.getGates()[k].output)+1] = m_s - (field->GetElement(input) - v);
+            gateShareArr[4*(circuit.getGates()[k].output)] = m_t;// set the share sent from the party owning the input
+            inputShares[2*k] = m_t;
+            gateShareArr[4*(circuit.getGates()[k].output)+1] = m_s - (field->GetElement(input) - v);
+            inputShares[2*k+1] = gateShareArr[4*(circuit.getGates()[k].output)+1];
 
         }
-        sizes_1[circuit.getGates()[k].party-1]++;
+        sizes_1[circuit.getGates()[k].party]++;
     }
 
     for(int i=0; i < N; i++)
     {
         sendBufsBytes_1[i].resize(sendBufsElements_1[i].size()*fieldByteSize);
         recBufBytes_1[i].resize(sizes_1[i]*fieldByteSize); // MEITAL!!
-        for(int j=0; j<sendBufsElements_1[i].size();j++) {
-            field->elementToBytes(sendBufsBytes_1[i].data() + (j * fieldByteSize), sendBufsElements_1[i][j]);
-        }
+//        for(int j=0; j<sendBufsElements_1[i].size();j++) {
+//            field->elementToBytes(sendBufsBytes_1[i].data() + (j * fieldByteSize), sendBufsElements_1[i][j]);
+//        }
+
+        field->elementVectorToByteVector(sendBufsElements_1[i], sendBufsBytes_1[i]);
     }
 
     roundFunctionSync(sendBufsBytes_1, recBufBytes_1,11);
@@ -1047,10 +963,38 @@ void ProtocolParty<FieldType>::inputPreparation()
 
     for (int k = 0; k < numOfInputGates; k++) {
         if (circuit.getGates()[k].gateType == INPUT && circuit.getGates()[k].party != m_partyId) {
-            gateShareArr[2*(circuit.getGates()[k].output)] = random_for_inputs[2*k];// set the share sent from the party owning the input
-            gateShareArr[2*(circuit.getGates()[k].output)+1] = random_for_inputs[2*k + 1] -
-                    recBufElements_1[circuit.getGates()[k].party - 1][counters_1[circuit.getGates()[k].party - 1]];
-            counters_1[circuit.getGates()[k].party - 1] += 1;
+            gateShareArr[4*(circuit.getGates()[k].output)] = random_for_inputs[2*k];// set the share sent from the party owning the input
+            inputShares[2*k] = gateShareArr[4*(circuit.getGates()[k].output)];
+            gateShareArr[4*(circuit.getGates()[k].output)+1] = random_for_inputs[2*k + 1] -
+                    recBufElements_1[circuit.getGates()[k].party][counters_1[circuit.getGates()[k].party]];
+            inputShares[2*k+1] = gateShareArr[4*(circuit.getGates()[k].output)+1];
+            counters_1[circuit.getGates()[k].party] += 1;
+
+
+        }
+    }
+    //set this random share to an entire array so we can use the semi honest multiplication
+    vector<FieldType> resultMult(numOfInputGates*2);
+
+    for(int i=0; i<numOfInputGates; i++){
+        resultMult[2*i] = random_element_for_verify[0];
+        resultMult[2*i+1] = random_element_for_verify[1];
+
+    }
+
+    //run the semi honest multiplication to get the second part of each share
+    honestMultiplication(inputShares.data(), resultMult.data(),resultMult, numOfInputGates);
+
+    //set the resulted multiplication to the array of shares
+
+    for (int k = 0; k < numOfInputGates; k++)
+    {
+        if(circuit.getGates()[k].gateType == INPUT)
+        {
+            //set the second part of the share
+            gateShareArr[circuit.getGates()[k].output*4+2] = resultMult[2*k];
+            gateShareArr[circuit.getGates()[k].output*4+3] = resultMult[2*k+1];
+
         }
     }
 
@@ -1081,14 +1025,16 @@ void ProtocolParty<FieldType>::openShare(int numOfRandomShares, vector<FieldType
     {
         sendBufsBytes[i].resize(sendBufsElements[i].size()*fieldByteSize);
 
-        for(int j=0; j<sendBufsElements[i].size();j++) {
-            field->elementToBytes(sendBufsBytes[i].data() + (j * fieldByteSize), sendBufsElements[i][j]);
-        }
+//        for(int j=0; j<sendBufsElements[i].size();j++) {
+//            field->elementToBytes(sendBufsBytes[i].data() + (j * fieldByteSize), sendBufsElements[i][j]);
+//        }
+
+        field->elementVectorToByteVector(sendBufsElements[i], sendBufsBytes[i]);
     }
 
     recBufBytes[LEFT].resize(numOfRandomShares*fieldByteSize);
     recBufBytes[RIGHT].resize(0);
-    recBufBytes[m_partyId - 1].resize(numOfRandomShares*fieldByteSize);
+    recBufBytes[m_partyId].resize(numOfRandomShares*fieldByteSize);
 
     roundFunctionSync(sendBufsBytes, recBufBytes,10);
 
@@ -1191,17 +1137,24 @@ int ProtocolParty<FieldType>::processNotMult(){
         // add gate
         if(circuit.getGates()[k].gateType == ADD)
         {
-            gateShareArr[circuit.getGates()[k].output * 2] = gateShareArr[circuit.getGates()[k].input1 * 2] + gateShareArr[circuit.getGates()[k].input2 * 2]; // t+t
-            gateShareArr[(circuit.getGates()[k].output * 2) + 1] = gateShareArr[(circuit.getGates()[k].input1 * 2) + 1] + gateShareArr[(circuit.getGates()[k].input2 * 2) + 1]; // s+s
+            gateShareArr[circuit.getGates()[k].output * 4] = gateShareArr[circuit.getGates()[k].input1 * 4] + gateShareArr[circuit.getGates()[k].input2 * 4]; // t+t
+            gateShareArr[(circuit.getGates()[k].output * 4) + 1] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 1] + gateShareArr[(circuit.getGates()[k].input2 * 4) + 1]; // s+s
+
+            gateShareArr[(circuit.getGates()[k].output * 4) + 2] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 2] + gateShareArr[(circuit.getGates()[k].input2 * 4) + 2]; // t+t
+            gateShareArr[(circuit.getGates()[k].output * 4) + 3] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 3] + gateShareArr[(circuit.getGates()[k].input2 * 4) + 3]; // s+s
+
             count++;
+
         }
         else if(circuit.getGates()[k].gateType == SCALAR)
         {
             long scalar(circuit.getGates()[k].input2);
             FieldType e = field->GetElement(scalar);
 
-            gateShareArr[circuit.getGates()[k].output * 2] = gateShareArr[circuit.getGates()[k].input1 * 2]; // t
-            gateShareArr[(circuit.getGates()[k].output * 2) + 1] = gateShareArr[(circuit.getGates()[k].input1 * 2) + 1] * e; // s*e
+            gateShareArr[circuit.getGates()[k].output * 4] = gateShareArr[circuit.getGates()[k].input1 * 4]; // t
+            gateShareArr[(circuit.getGates()[k].output * 4) + 1] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 1] * e; // s*e
+            gateShareArr[(circuit.getGates()[k].output * 4) + 2] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 2] * e; // s*e
+            gateShareArr[(circuit.getGates()[k].output * 4) + 3] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 3] * e; // s*e
 
             count++;
         }
@@ -1224,9 +1177,9 @@ int ProtocolParty<FieldType>::processMultiplications()
     int index = 0;
     FieldType p2, d2;
     FieldType ri, r_i_1;
-    vector<FieldType> sendBufsElements(size);
-    vector<byte> sendBufsBytes(size*fieldByteSize);
-    vector<byte> recBufsBytes(size*fieldByteSize);
+    vector<FieldType> sendBufsElements(2*size);
+    vector<byte> sendBufsBytes(2*size*fieldByteSize);
+    vector<byte> recBufsBytes(2*size*fieldByteSize);
 
     for(int k = circuit.getLayers()[currentCirciutLayer]; k < circuit.getLayers()[currentCirciutLayer+1] ; k++)//go over only the logit gates
     {
@@ -1234,11 +1187,18 @@ int ProtocolParty<FieldType>::processMultiplications()
         if(circuit.getGates()[k].gateType == MULT)
         {
 
-            ri = (gateShareArr[(circuit.getGates()[k].input1 * 2) + 1] * gateShareArr[(circuit.getGates()[k].input2 * 2) + 1] -
-                    gateShareArr[(circuit.getGates()[k].input1 * 2)] * gateShareArr[(circuit.getGates()[k].input2 * 2)] + alpha[mult_count]) * inv_3;
+            ri = (gateShareArr[(circuit.getGates()[k].input1 * 4) + 1] * gateShareArr[(circuit.getGates()[k].input2 * 4) + 1] -
+                    gateShareArr[(circuit.getGates()[k].input1 * 4)] * gateShareArr[(circuit.getGates()[k].input2 * 4)] + alpha[mult_count]) * inv_3;
 
             //send ri to pi+1 = RIGHT
-            sendBufsElements[index] = ri;
+            sendBufsElements[2*index] = ri;
+            mult_count++;
+
+            ri = (gateShareArr[(circuit.getGates()[k].input1 * 4) + 3] * gateShareArr[(circuit.getGates()[k].input2 * 4) + 1] -
+                  gateShareArr[(circuit.getGates()[k].input1 * 4+2)] * gateShareArr[(circuit.getGates()[k].input2 * 4)] + alpha[mult_count]) * inv_3;
+
+            //send ri to pi+1 = RIGHT
+            sendBufsElements[2*index + 1] = ri;
 
             index++;
             mult_count++;
@@ -1246,9 +1206,11 @@ int ProtocolParty<FieldType>::processMultiplications()
     }
 
     //convert to bytes
-    for(int j=0; j < size; j++) {
-        field->elementToBytes(sendBufsBytes.data() + (j * fieldByteSize), sendBufsElements[j]);
-    }
+//    for(int j=0; j < size; j++) {
+//        field->elementToBytes(sendBufsBytes.data() + (j * fieldByteSize), sendBufsElements[j]);
+//    }
+
+    field->elementVectorToByteVector(sendBufsElements, sendBufsBytes);
 
     sendNext(sendBufsBytes, recBufsBytes);
 
@@ -1258,13 +1220,21 @@ int ProtocolParty<FieldType>::processMultiplications()
 
         if(circuit.getGates()[k].gateType == MULT) {
 
-                r_i_1 = field->bytesToElement(recBufsBytes.data() + (index * fieldByteSize));
+                r_i_1 = field->bytesToElement(recBufsBytes.data() + (2*index * fieldByteSize));
 
-                ri = sendBufsElements[index];
+                ri = sendBufsElements[2*index];
 
-                gateShareArr[(circuit.getGates()[k].output) * 2] = r_i_1 - ri; // ei
+                gateShareArr[(circuit.getGates()[k].output) * 4] = r_i_1 - ri; // ei
 
-                gateShareArr[(circuit.getGates()[k].output) * 2 + 1] = num_0 - (num_2 * r_i_1) - ri; //  fi
+                gateShareArr[(circuit.getGates()[k].output) * 4 + 1] = num_0 - (num_2 * r_i_1) - ri; //  fi
+
+                r_i_1 = field->bytesToElement(recBufsBytes.data() + ((2*index +1) * fieldByteSize));
+
+                ri = sendBufsElements[2*index+1];
+
+                gateShareArr[(circuit.getGates()[k].output) * 4+2] = r_i_1 - ri; // ei
+
+                gateShareArr[(circuit.getGates()[k].output) * 4 + 3] = num_0 - (num_2 * r_i_1) - ri; //  fi
 
 
             index++;
@@ -1300,17 +1270,19 @@ void ProtocolParty<FieldType>::outputPhase()
         if(circuit.getGates()[k].gateType == OUTPUT)
         {
             // send to party (which need this gate) your share for this gate
-            sendBufsElements[circuit.getGates()[k].party - 1].push_back(gateShareArr[2*circuit.getGates()[k].input1]);// send t
+            sendBufsElements[circuit.getGates()[k].party].push_back(gateShareArr[4*circuit.getGates()[k].input1]);// send t
         }
     }
 
     for(int i=0; i < N; i++)
     {
         sendBufsBytes[i].resize(sendBufsElements[i].size()*fieldByteSize);
-        recBufBytes[i].resize(sendBufsElements[m_partyId - 1].size()*fieldByteSize);
-        for(int j=0; j<sendBufsElements[i].size();j++) {
-            field->elementToBytes(sendBufsBytes[i].data() + (j * fieldByteSize), sendBufsElements[i][j]);
-        }
+        recBufBytes[i].resize(sendBufsElements[m_partyId].size()*fieldByteSize);
+//        for(int j=0; j<sendBufsElements[i].size();j++) {
+//            field->elementToBytes(sendBufsBytes[i].data() + (j * fieldByteSize), sendBufsElements[i][j]);
+//        }
+
+        field->elementVectorToByteVector(sendBufsElements[i], sendBufsBytes[i]);
     }
 
     roundFunctionSync(sendBufsBytes, recBufBytes,7);
@@ -1325,8 +1297,8 @@ void ProtocolParty<FieldType>::outputPhase()
             t_i_1 = field->bytesToElement(recBufBytes[LEFT].data() + (counter*fieldByteSize));
             ti = field->bytesToElement(recBufBytes[RIGHT].data() + ((counter)*fieldByteSize));
 
-            m_t = gateShareArr[(circuit.getGates()[k].input1)*2];
-            m_s = gateShareArr[(circuit.getGates()[k].input1)*2 + 1];
+            m_t = gateShareArr[(circuit.getGates()[k].input1)*4];
+            m_s = gateShareArr[(circuit.getGates()[k].input1)*4 + 1];
             FieldType value = t_i_1 + ti + m_t;
 
             // my output: reconstruct received shares
@@ -1362,7 +1334,7 @@ void ProtocolParty<FieldType>::roundFunctionSync(vector<vector<byte>> &sendBufs,
     int numThreads = 2;
     int numPartiesForEachThread = 1;
 
-    recBufs[m_partyId-1] = sendBufs[m_partyId-1];
+    recBufs[m_partyId] = sendBufs[m_partyId];
     //recieve the data using threads
     vector<thread> threads(numThreads);
     for (int t=0; t<numThreads; t++) {
@@ -1382,13 +1354,13 @@ void ProtocolParty<FieldType>::roundFunctionSync(vector<vector<byte>> &sendBufs,
 template <class FieldType>
 void ProtocolParty<FieldType>::sendNext(vector<byte> &sendBufs, vector<byte> &recBufs) {
 
-    if (m_partyId == 1)
+    if (m_partyId == 0)
     {
         rightChannel->write(sendBufs.data(), sendBufs.size()); // write to party 2
 
         leftChannel->read(recBufs.data(), recBufs.size()); // read from party 3
 
-    } else if (m_partyId == 2)
+    } else if (m_partyId == 1)
     {
         leftChannel->read(recBufs.data(), recBufs.size()); // read from party 1
 
@@ -1409,7 +1381,7 @@ void ProtocolParty<FieldType>::exchangeData(vector<vector<byte>> &sendBufs, vect
     //cout<<"in exchangeData";
     for (int i=first; i < last; i++) {
 
-        if ((m_partyId-1) < parties[i]->getID()) {
+        if ((m_partyId) < parties[i]->getID()) {
 
 
             //send shares to my input bits
@@ -1446,8 +1418,8 @@ template <class FieldType>
 ProtocolParty<FieldType>::~ProtocolParty()
 {
     protocolTimer->writeToFile();
-    delete protocolTimer;
-    delete field;
+    //delete protocolTimer;
+    //delete field;
 
 
     //delete comm;
