@@ -683,8 +683,6 @@ void ProtocolParty<FieldType>::verification(int numOfMult)
     }
 
 
-    cout<<"after creating beta"<<endl;
-
     //preapre x,y,z for the verification sub protocol
     vector<FieldType> neededShares(numOfMult*4);
 
@@ -747,12 +745,13 @@ void ProtocolParty<FieldType>::verification(int numOfMult)
 
     //check that T=0
     if(secretArr[0] != *field->GetZero()) {
-        cout<<"bassssssaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"<<endl;
+        if(flag_print)
+            cout<<"bassssssaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"<<endl;
         return;
     }
     else {
-
-        cout<<"yessssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss"<<endl;
+        if(flag_print)
+            cout<<"yessssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss"<<endl;
         return;
     }
 
