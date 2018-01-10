@@ -6,3 +6,4 @@ ReplicatedSecretSharing3PartiesArithmeticNoTriples
 ReplicatedSecretSharing3PartiesArithmetic.cbp
 ReplicatedSecretSharing3PartiesArithmeticNoTriples.cbp
 cmake_install.cmake
+Makefile
