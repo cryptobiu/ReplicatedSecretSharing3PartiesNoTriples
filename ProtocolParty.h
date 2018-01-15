@@ -8,7 +8,8 @@
 #include <libscapi/include/cryptoInfra/Protocol.hpp>
 
 #include <libscapi/include/primitives/Mersenne.hpp>
-#include "ProtocolTimer.h"
+//#include "ProtocolTimer.h"
+#include <libscapi/include/infra/Measurement.hpp>
 #include "HashEncrypt.h"
 #include <libscapi/include/infra/Common.hpp>
 #include <thread>
@@ -30,7 +31,7 @@ private:
      * T - number of malicious
      * M - number of gates
      */
-    ProtocolTimer* protocolTimer;
+    Measurement* timer;
     int currentCirciutLayer = 0;
     int M, m_partyId;
     int numOfInputGates, numOfOutputGates;
@@ -213,9 +214,8 @@ template <class FieldType>
 ProtocolParty<FieldType>::ProtocolParty(int argc, char* argv[]) : Protocol("Replicated secret sharing 3 parties arithmetic", argc, argv) {
 
     this->times = stoi(arguments["internalIterationsNumber"]);
-    string outputTimerFileName = arguments["circuitFile"] + "Times" + arguments["internalIterationsNumber"] + ".csv";
-
-    this->protocolTimer = new ProtocolTimer(times, outputTimerFileName);
+    vector<string> subTaskNames{"Offline", "preparationPhase", "Online", "inputPhase", "ComputePhase", "VerificationPhase", "outputPhase"};
+    timer = new Measurement(*this, subTaskNames);
 
     string fieldType = arguments["fieldType"];
     if(fieldType.compare("ZpMersenne") == 0)
@@ -265,16 +265,7 @@ ProtocolParty<FieldType>::ProtocolParty(int argc, char* argv[]) : Protocol("Repl
     }
 
     readMyInputs();
-
-    auto t1 = high_resolution_clock::now();
     initializationPhase();
-
-    auto t2 = high_resolution_clock::now();
-
-    auto duration = duration_cast<milliseconds>(t2-t1).count();
-    if(flag_print_timings) {
-        cout << "time in milliseconds initializationPhase: " << duration << endl;
-    }
 }
 
 template <class FieldType>
@@ -300,8 +291,12 @@ template <class FieldType>
 void ProtocolParty<FieldType>::run() {
     for (int i=0; i<times; i++){
         iteration = i;
+        timer->startSubTask("Offline", iteration);
         runOffline();
+        timer->endSubTask("Offline", iteration);
+        timer->startSubTask("Online", iteration);
         runOnline();
+        timer->endSubTask("Online", iteration);
     }
 }
 
@@ -310,6 +305,7 @@ void ProtocolParty<FieldType>::runOffline() {
 
     index_for_mults = 0;
     auto t1 = high_resolution_clock::now();
+    timer->startSubTask("preparationPhase", iteration);
 
     if(fieldByteSize > 4) {
         generateRandomness61Bits();
@@ -317,86 +313,34 @@ void ProtocolParty<FieldType>::runOffline() {
         generateRandomness31Bits();
     }
 
-    auto t2 = high_resolution_clock::now();
-
-    auto duration = duration_cast<milliseconds>(t2-t1).count();
-    if(flag_print_timings) {
-        cout << "time in milliseconds  generateRandomness: " << duration << endl;
-    }
-
-    protocolTimer->preparationPhaseArr[iteration] =duration;
+    timer->endSubTask("preparationPhase", iteration);
 }
 
 template <class FieldType>
 void ProtocolParty<FieldType>::runOnline() {
-    auto t1 = high_resolution_clock::now();
+    timer->startSubTask("inputPhase", iteration);
     inputPreparation();
     comparingViews();
-    auto t2 = high_resolution_clock::now();
+    timer->endSubTask("inputPhase", iteration);
 
-    auto duration = duration_cast<milliseconds>(t2-t1).count();
-    if(flag_print_timings) {
-        cout << "time in milliseconds   inputPreparation: " << duration << endl;
-    }
-
-    protocolTimer->inputPreparationArr[iteration] =duration;
-
-
-    t1 = high_resolution_clock::now();
+    timer->startSubTask("ComputePhase", iteration);
     computationPhase();
+    timer->endSubTask("ComputePhase", iteration);
 
-
-    t2 = high_resolution_clock::now();
-
-    duration = duration_cast<milliseconds>(t2-t1).count();
-    if(flag_print_timings) {
-        cout << "time in milliseconds   computationPhase: " << duration << endl;
-    }
-
-    protocolTimer->computationPhaseArr[iteration] =duration;
-
-
-    t1 = high_resolution_clock::now();
-
-
+    timer->startSubTask("VerificationPhase", iteration);
     //calc the number of times we need to run the verification
     int iterations =   (5 + field->getElementSizeInBytes() - 1) / field->getElementSizeInBytes();
     if(circuit.getNrOfMultiplicationGates() > 0) {
-
-
         for(int i=0; i<iterations; i++) {
-
             verification(circuit.getNrOfMultiplicationGates() + circuit.getNrOfInputGates());
-
         }
-
-
-
     }
+    timer->endSubTask("VerificationPhase", iteration);
 
-
-
-    t2 = high_resolution_clock::now();
-
-    duration = duration_cast<milliseconds>(t2-t1).count();
-    if(flag_print_timings) {
-        cout << "time in milliseconds   verification: " << duration << endl;
-    }
-
-    protocolTimer->verificationPhaseArr[iteration] =duration;
-
-    t1 = high_resolution_clock::now();
+    timer->startSubTask("outputPhase", iteration);
     outputPhase();
+    timer->endSubTask("outputPhase", iteration);
 
-
-    t2 = high_resolution_clock::now();
-
-    duration = duration_cast<milliseconds>(t2-t1).count();
-    if(flag_print_timings) {
-        cout << "time in milliseconds   outputPhase: " << duration << endl;
-    }
-
-    protocolTimer->outputPhaseArr[iteration] =duration;
 }
 
 template <class FieldType>
@@ -1416,12 +1360,7 @@ void ProtocolParty<FieldType>::exchangeData(vector<vector<byte>> &sendBufs, vect
 template <class FieldType>
 ProtocolParty<FieldType>::~ProtocolParty()
 {
-    protocolTimer->writeToFile();
-    //delete protocolTimer;
-    //delete field;
-
-
-    //delete comm;
+    delete timer;
 }
 
 #endif /* PROTOCOL_H_ */
