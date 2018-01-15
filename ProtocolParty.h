@@ -211,7 +211,7 @@ public:
 };
 
 template <class FieldType>
-ProtocolParty<FieldType>::ProtocolParty(int argc, char* argv[]) : Protocol("Replicated secret sharing 3 parties arithmetic", argc, argv) {
+ProtocolParty<FieldType>::ProtocolParty(int argc, char* argv[]) : Protocol("ReplicatedSecretSharing3PartiesArithmetic", argc, argv) {
 
     this->times = stoi(arguments["internalIterationsNumber"]);
     vector<string> subTaskNames{"Offline", "preparationPhase", "Online", "inputPhase", "ComputePhase", "VerificationPhase", "outputPhase"};
