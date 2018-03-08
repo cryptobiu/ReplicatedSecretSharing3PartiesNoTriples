@@ -72,7 +72,7 @@ private:
     int shareIndex; // number of shares for inputs
     int mult_count = 0;
 
-    vector<int> myInputs;
+    vector<long> myInputs;
     string s;
 
     shared_ptr<CommParty> leftChannel; // the channel with party i minus 1
@@ -272,7 +272,7 @@ template <class FieldType>
 void ProtocolParty<FieldType>::readMyInputs()
 {
     ifstream myfile;
-    int input;
+    long input;
     int i =0;
     myfile.open(inputsFile);
     do {
