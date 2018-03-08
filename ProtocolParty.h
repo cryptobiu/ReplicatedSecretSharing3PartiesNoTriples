@@ -212,12 +212,12 @@ public:
 
 template <class FieldType>
 ProtocolParty<FieldType>::ProtocolParty(int argc, char* argv[]) : Protocol("ReplicatedSecretSharing3PartiesArithmetic", argc, argv) {
-
-    this->times = stoi(arguments["internalIterationsNumber"]);
+    CmdParser parser;
+    this->times = stoi(parser.getValueByKey(arguments, "internalIterationsNumber"));
     vector<string> subTaskNames{"Offline", "preparationPhase", "Online", "inputPhase", "ComputePhase", "VerificationPhase", "outputPhase"};
     timer = new Measurement(*this, subTaskNames);
 
-    string fieldType = arguments["fieldType"];
+    string fieldType = parser.getValueByKey(arguments, "fieldType");
     if(fieldType.compare("ZpMersenne") == 0)
     {
         field = new TemplateField<FieldType>(2147483647);
@@ -225,20 +225,20 @@ ProtocolParty<FieldType>::ProtocolParty(int argc, char* argv[]) : Protocol("Repl
     {
         field = new TemplateField<FieldType>(0);
     }
-    this->inputsFile = arguments["inputFile"];
-    this->outputFile = arguments["outputFile"];
+    this->inputsFile = parser.getValueByKey(arguments, "inputFile");
+    this->outputFile = parser.getValueByKey(arguments, "outputFile");
 
-    m_partyId = stoi(arguments["partyID"]);
+    m_partyId = stoi(parser.getValueByKey(arguments, "partyID"));
     s = to_string(m_partyId);
-    circuit.readCircuit(arguments["circuitFile"].c_str());
+    circuit.readCircuit(parser.getValueByKey(arguments, "circuitFile").c_str());
     circuit.reArrangeCircuit();
     M = circuit.getNrOfGates();
     numOfInputGates = circuit.getNrOfInputGates();
     numOfOutputGates = circuit.getNrOfOutputGates();
     myInputs.resize(numOfInputGates);
     shareIndex = numOfInputGates;
-
-    parties = MPCCommunication::setCommunication(io_service, m_partyId, N, arguments["partiesFile"]);
+    string partiesFilePath = parser.getValueByKey(arguments, "partiesFile");
+    parties = MPCCommunication::setCommunication(io_service, m_partyId, N, partiesFilePath);
 
     int R = 0, L = 1; // TO DO: communication
 
