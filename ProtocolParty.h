@@ -1157,6 +1157,19 @@ int ProtocolParty<FieldType>::processNotMult(){
 
             count++;
         }
+
+        else if(circuit.getGates()[k].gateType == SCALAR_ADD)
+        {
+            long scalar(circuit.getGates()[k].input2);
+            FieldType e = field->GetElement(scalar);
+
+            gateShareArr[circuit.getGates()[k].output * 4] = gateShareArr[circuit.getGates()[k].input1 * 4]; // t
+            gateShareArr[(circuit.getGates()[k].output * 4) + 1] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 1] - e; // s-e
+            gateShareArr[(circuit.getGates()[k].output * 4) + 2] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 2] ; // t
+            gateShareArr[(circuit.getGates()[k].output * 4) + 3] = gateShareArr[(circuit.getGates()[k].input1 * 4) + 3] - e; // s-e
+
+            count++;
+        }
     }
 
     return count;
