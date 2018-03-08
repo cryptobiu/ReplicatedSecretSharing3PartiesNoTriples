@@ -1,4 +1,9 @@
 CMakeCache.txt
-CmakeFiles/*
-.idea/*
-cmake-build-debug/*
+cmake-build-debug/
+.idea/
+CMakeFiles/
+ReplicatedSecretSharing3PartiesArithmeticNoTriples
+ReplicatedSecretSharing3PartiesArithmetic.cbp
+ReplicatedSecretSharing3PartiesArithmeticNoTriples.cbp
+cmake_install.cmake
+Makefile
